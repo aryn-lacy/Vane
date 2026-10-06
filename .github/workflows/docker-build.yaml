@@ -13,6 +13,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Image builds only on master pushes; PRs run the fast typecheck gate.
+    # (Multi-arch QEMU builds take 30+ min — pointless on every PR.)
+    if: github.event_name == 'push'
     permissions:
       contents: read
       packages: write
