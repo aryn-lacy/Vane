@@ -5,7 +5,7 @@ import {
   DialogTitle,
 } from '@headlessui/react';
 import { Loader2, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ConfigModelProvider,
@@ -15,6 +15,10 @@ import {
 } from '@/lib/config/types';
 import Select from '@/components/ui/Select';
 import { toast } from 'sonner';
+
+const isSecretField = (field: UIConfigField) =>
+  (field as { type?: string }).type === 'password' ||
+  /key|secret|token|password/i.test(field.key);
 
 const AddProvider = ({
   modelProviders,
@@ -44,19 +48,26 @@ const AddProvider = ({
     return map;
   }, [modelProviders]);
 
-  const selectedProviderFields = useMemo(() => {
-    if (!selectedProvider) return [];
-    const providerFields = providerConfigMap[selectedProvider]?.fields || [];
-    const config: Record<string, any> = {};
+  const selectedProviderFields =
+    (selectedProvider ? providerConfigMap[selectedProvider]?.fields : []) ??
+    [];
 
-    providerFields.forEach((field) => {
+  // Initialize the form ONLY when the dialog opens (or the provider type
+  // changes) — never during render and never on unrelated re-renders. The
+  // previous implementation ran setConfig inside a useMemo body: any parent
+  // re-render that changed the modelProviders array identity silently reset
+  // the form mid-edit and discarded everything the user had typed.
+  useEffect(() => {
+    if (!open) return;
+
+    const config: Record<string, any> = {};
+    selectedProviderFields.forEach((field) => {
       config[field.key] = field.default || '';
     });
 
     setConfig(config);
-
-    return providerFields;
-  }, [selectedProvider, providerConfigMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selectedProvider]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,11 +189,14 @@ const AddProvider = ({
                                 [field.key]: event.target.value,
                               }))
                             }
-                            className="w-full rounded-lg border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary px-4 py-3 pr-10 text-[13px] text-black/80 dark:text-white/80 placeholder:text-black/40 dark:placeholder:text-white/40 focus-visible:outline-none focus-visible:border-light-300 dark:focus-visible:border-dark-300 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-lg border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary px-4 py-3 pr-10 text-sm text-black/80 dark:text-white/80 placeholder:text-black/40 dark:placeholder:text-white/40 focus-visible:outline-none focus-visible:border-light-300 dark:focus-visible:border-dark-300 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             placeholder={
                               (field as StringUIConfigField).placeholder
                             }
-                            type="text"
+                            type={isSecretField(field) ? 'password' : 'text'}
+                            autoComplete={
+                              isSecretField(field) ? 'off' : undefined
+                            }
                             required={field.required}
                           />
                         </div>

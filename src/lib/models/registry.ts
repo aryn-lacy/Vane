@@ -96,13 +96,19 @@ class ModelRegistry {
     name: string,
     config: Record<string, any>,
   ): Promise<ConfigModelProvider> {
-    const provider = providers[type];
-    if (!provider) throw new Error('Invalid provider type');
+    const Provider = providers[type];
+    if (!Provider) throw new Error('Invalid provider type');
+
+    // Validate BEFORE persisting: a bad config must never reach config.json.
+    // Previously the raw config was written to disk first and validation only
+    // happened at provider init, so invalid configs (e.g. missing apiKey)
+    // silently persisted and only surfaced as runtime failures on every chat.
+    Provider.parseAndValidate(config);
 
     const newProvider = configManager.addModelProvider(type, name, config);
 
     const instance = createProviderInstance(
-      provider,
+      Provider,
       newProvider.id,
       newProvider.name,
       newProvider.config,
@@ -154,13 +160,25 @@ class ModelRegistry {
     name: string,
     config: any,
   ): Promise<ConfigModelProvider> {
+    const existing = this.activeProviders.find((p) => p.id === providerId);
+
+    if (!existing) throw new Error('Invalid provider id');
+
+    const Provider = providers[existing.type];
+    if (!Provider) throw new Error('Invalid provider type');
+
+    // Validate BEFORE persisting — a config that fails the provider's own
+    // parser (e.g. missing apiKey/baseURL) must never overwrite a working
+    // entry on disk.
+    Provider.parseAndValidate(config);
+
     const updated = await configManager.updateModelProvider(
       providerId,
       name,
       config,
     );
     const instance = createProviderInstance(
-      providers[updated.type],
+      Provider,
       providerId,
       name,
       config,
@@ -186,10 +204,21 @@ class ModelRegistry {
       };
     }
 
-    this.activeProviders.push({
-      ...updated,
-      provider: instance,
-    });
+    // Replace the active instance instead of pushing a duplicate — the old
+    // implementation left the previous (possibly stale-credentialed) instance
+    // active until process restart.
+    const idx = this.activeProviders.findIndex((p) => p.id === providerId);
+    if (idx !== -1) {
+      this.activeProviders[idx] = {
+        ...updated,
+        provider: instance,
+      };
+    } else {
+      this.activeProviders.push({
+        ...updated,
+        provider: instance,
+      });
+    }
 
     return {
       ...updated,

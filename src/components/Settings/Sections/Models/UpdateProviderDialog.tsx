@@ -9,6 +9,10 @@ import {
 } from '@/lib/config/types';
 import { toast } from 'sonner';
 
+const isSecretField = (field: UIConfigField) =>
+  (field as { type?: string }).type === 'password' ||
+  /key|secret|token|password/i.test(field.key);
+
 const UpdateProvider = ({
   modelProvider,
   fields,
@@ -23,18 +27,27 @@ const UpdateProvider = ({
   const [name, setName] = useState(modelProvider.name);
   const [loading, setLoading] = useState(false);
 
+  // Initialize the form ONLY when the dialog opens. The previous
+  // implementation re-ran on every `fields` identity change — and the parent
+  // creates a new fields array on each render — so any background re-render
+  // silently reset the form mid-edit. Worse: re-initializing from
+  // modelProvider.config on unrelated renders meant an async refresh of the
+  // providers list could wipe in-progress edits at any moment.
   useEffect(() => {
+    if (!open) return;
+
     const config: Record<string, any> = {
       name: modelProvider.name,
     };
 
     fields.forEach((field) => {
       config[field.key] =
-        modelProvider.config[field.key] || field.default || '';
+        modelProvider.config?.[field.key] ?? field.default ?? '';
     });
 
     setConfig(config);
-  }, [fields]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,11 +163,14 @@ const UpdateProvider = ({
                                 [field.key]: event.target.value,
                               }))
                             }
-                            className="w-full rounded-lg border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary px-4 py-3 pr-10 text-[13px] text-black/80 dark:text-white/80 placeholder:text-black/40 dark:placeholder:text-white/40 focus-visible:outline-none focus-visible:border-light-300 dark:focus-visible:border-dark-300 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-lg border border-light-200 dark:border-dark-200 bg-light-primary dark:bg-dark-primary px-4 py-3 pr-10 text-sm text-black/80 dark:text-white/80 placeholder:text-black/40 dark:placeholder:text-white/40 focus-visible:outline-none focus-visible:border-light-300 dark:focus-visible:border-dark-300 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                             placeholder={
                               (field as StringUIConfigField).placeholder
                             }
-                            type="text"
+                            type={isSecretField(field) ? 'password' : 'text'}
+                            autoComplete={
+                              isSecretField(field) ? 'off' : undefined
+                            }
                             required={field.required}
                           />
                         </div>
