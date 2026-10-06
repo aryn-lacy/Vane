@@ -160,7 +160,14 @@ class ModelRegistry {
     name: string,
     config: any,
   ): Promise<ConfigModelProvider> {
-    const existing = this.activeProviders.find((p) => p.id === providerId);
+    // Fall back to the stored config when the provider isn't active (its
+    // init failed — e.g. a previously-wiped {name}-only config). Without
+    // this, dead providers can never be repaired from the UI.
+    const existing =
+      this.activeProviders.find((p) => p.id === providerId) ??
+      configManager
+        .getCurrentConfig()
+        .modelProviders.find((p) => p.id === providerId);
 
     if (!existing) throw new Error('Invalid provider id');
 

@@ -8,7 +8,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # NOTE: must be lowercase — github.repository is "aryn-lacy/Vane" and GHCR
+  # rejects uppercase image repository names.
+  IMAGE_NAME: ${{ github.repository_owner }}/vane
 
 jobs:
   build:
