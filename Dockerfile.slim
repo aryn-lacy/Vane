@@ -35,4 +35,9 @@ RUN yarn playwright install --with-deps --only-shell chromium
 
 EXPOSE 3000
 
+# Next.js standalone server binds to $HOSTNAME when set (Docker sets it to the
+# container hostname = a single interface IP). On multi-network containers that
+# makes the app unreachable on every other interface. 0.0.0.0 binds all.
+ENV HOSTNAME=0.0.0.0
+
 CMD ["node", "server.js"]
